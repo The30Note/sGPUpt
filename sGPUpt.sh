@@ -488,7 +488,13 @@ function edk2_compile()
   git submodule update --init 2>&1 | tee -a "$log_file"
 
   # Spoofing edits
+  bios_vendor=$(dmidecode -t 0 | awk '$1 == "Vendor:" {print substr($0, index($0, ":") + 2)}')
+
+  if [[$bios_vendor == ""]]; then 
   bios_vendor="American Megatrends"
+  logger info "Unable to get BIOS vendor from dmidecode, defaulting to \"American Megatrends\""
+  fi
+
   sed -i "s/\"EDK II\"/\"$bios_vendor\"/" "${edk2_dir}/MdeModulePkg/MdeModulePkg.dec"
   sed -i "s/\"EDK II\"/\"$bios_vendor\"/" "${edk2_dir}/ShellPkg/ShellPkg.dec"
 
