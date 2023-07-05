@@ -98,10 +98,10 @@ function main()
 {
   # Pre-config validation
   [[ $(whoami) != "root" ]]                                     && logger error "This script requires root privileges!"
-  # Temp ignore for testing [[ -z $(grep -E -m 1 "svm|vmx" /proc/cpuinfo) ]]              && logger error "This system doesn't support virtualization, please enable it then run this script again!"
-  # Temp ignore for testing [[ ! -e /sys/firmware/efi ]]                                  && logger error "This system isn't installed in UEFI mode!"
-  # Temp ignore for testing [[ -z $(ls -A /sys/class/iommu/) ]]                           && logger error "This system doesn't support IOMMU, please enable it then run this script again!"
-  # Temp ignore for testing [[ $(nproc) -ne $(grep --count ^processor /proc/cpuinfo) ]]   && logger error "The script will not work correctly if your CPU is isolated, please remove the isolation then try again."
+  [[ -z $(grep -E -m 1 "svm|vmx" /proc/cpuinfo) ]]              && logger error "This system doesn't support virtualization, please enable it then run this script again!"
+  [[ ! -e /sys/firmware/efi ]]                                  && logger error "This system isn't installed in UEFI mode!"
+  [[ -z $(ls -A /sys/class/iommu/) ]]                           && logger error "This system doesn't support IOMMU, please enable it then run this script again!"
+  [[ $(nproc) -ne $(grep --count ^processor /proc/cpuinfo) ]]   && logger error "The script will not work correctly if your CPU is isolated, please remove the isolation then try again."
 
   header
 
@@ -119,12 +119,12 @@ function main()
   [[ -e "/etc/libvirt/qemu/${vm_name}.xml" ]] && logger error "sGPUpt Will not overwrite an existing VM Config!"
 
   # Call Funcs
-  #query_system
+  query_system
   install_packages
-  #security_checks
+  security_checks
   compile_checks
-  #setup_libvirt
-  #create_vm
+  setup_libvirt
+  create_vm
 
   # NEEDED TO FIX DEBIAN-BASED DISTROS USING VIRT-MANAGER
   if [[ $first_install == "true" ]]; then
@@ -454,7 +454,7 @@ function qemu_compile()
   sed -i "s/\"QEMU\"/\"$qemu_tablet_vendor\"/"                                              "${qemu_dir}/hw/usb/dev-wacom.c"
   sed -i "s/\"Wacom PenPartner\"/\"$qemu_tablet_name\"/"                                    "${qemu_dir}/hw/usb/dev-wacom.c"
   sed -i "s/\"QEMU PenPartner Tablet\"/\"$qemu_tablet_name\"/"                              "${qemu_dir}/hw/usb/dev-wacom.c"
-  # Ignore for testing sed -i "s/#define DEFAULT_CPU_SPEED 2000/#define DEFAULT_CPU_SPEED $cpu_speed/"           "${qemu_dir}/hw/smbios/smbios.c"
+  sed -i "s/#define DEFAULT_CPU_SPEED 2000/#define DEFAULT_CPU_SPEED $cpu_speed/"           "${qemu_dir}/hw/smbios/smbios.c"
   sed -i "s/KVMKVMKVM\\\\0\\\\0\\\\0/$cpu_brand/"                                           "${qemu_dir}/include/standard-headers/asm-x86/kvm_para.h"
   sed -i "s/KVMKVMKVM\\\\0\\\\0\\\\0/$cpu_brand/"                                           "${qemu_dir}/target/i386/kvm/kvm.c"
   sed -i "s/\"bochs\"/\"$qemu_motherboard_bios_vendor\"/"                                   "${qemu_dir}/block/bochs.c"
