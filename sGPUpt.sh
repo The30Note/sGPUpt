@@ -115,12 +115,12 @@ function main()
   [[ -e "/etc/libvirt/qemu/${vm_name}.xml" ]] && logger error "sGPUpt Will not overwrite an existing VM Config!"
 
   # Call Funcs
-  query_system
-  install_packages
-  security_checks
+  # query_system
+   install_packages
+  # security_checks
   compile_checks
-  setup_libvirt
-  create_vm
+  # setup_libvirt
+  # create_vm
 
   # NEEDED TO FIX DEBIAN-BASED DISTROS USING VIRT-MANAGER
   if [[ $first_install == "true" ]]; then
@@ -262,11 +262,11 @@ function find_pcie_devices()
     for d in $g/devices/*; do
       device_id=$(echo ${d##*/} | cut -c6-)
       device_output=$(lspci -nns $device_id)
-      
+
       if [[ $device_output =~ ("PCI bridge"|"Non-Essential Instrumentation"|"RAM memory") ]]; then
         continue
       fi
-      
+
       if [[ $device_output =~ ("VGA"|"Audio"|"USB"|"Serial") && $device_output =~ ("NVIDIA"|"AMD/ATI"|"Arc") ]]; then
         IncrementGPU "${g##*/}" "$device_id" "$device_output"
         continue
@@ -420,6 +420,9 @@ function qemu_compile()
   qemu_tablet_name="Wacom Tablet"
   cpu_brand=$(grep -m 1 'vendor_id' /proc/cpuinfo | cut -c13-)
   cpu_speed=$(dmidecode | grep -m 1 "Current Speed:" | cut -d" " -f3)
+  smbios_extbyte_2=$(sudo dmidecode -t 0 -u | awk 'NR == 8 {print substr($0, 12, 2)}')
+  
+  [[ ! $smbios_extbyte_2:0:1 =~ [0-9a-fA-F] || ! $smbios_extbyte_2:1:1 =~ [0-9A-F] ]] && smbios_extbyte_2="0D" && logger info "Unable to get SMBIOS extension byte 2 from dmidecode, defaulting to 0x0D"
 
   # Spoofing edits ~ We should probably add a bit more here...
   sed -i "s/\"BOCHS \"/\"$qemu_bios_string1\"/"                                             "${qemu_dir}/include/hw/acpi/aml-build.h"
@@ -437,6 +440,7 @@ function qemu_compile()
   sed -i "s/KVMKVMKVM\\\\0\\\\0\\\\0/$cpu_brand/"                                           "${qemu_dir}/include/standard-headers/asm-x86/kvm_para.h"
   sed -i "s/KVMKVMKVM\\\\0\\\\0\\\\0/$cpu_brand/"                                           "${qemu_dir}/target/i386/kvm/kvm.c"
   sed -i "s/\"bochs\"/\"$qemu_motherboard_bios_vendor\"/"                                   "${qemu_dir}/block/bochs.c"
+  sed -i "s/= 0x14/= 0x$smbios_extbyte_2/"                                                  "${qemu_dir}/hw/smbios/smbios.c"
 
   ./configure --enable-spice --disable-werror 2>&1 | tee -a "$log_file"
   make -j$(nproc) 2>&1 | tee -a "$log_file"
