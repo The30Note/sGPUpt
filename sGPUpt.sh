@@ -46,7 +46,8 @@ log_file="/etc/sGPUpt/sGPUpt.log"
 log_hook="/etc/sGPUpt/sGPUpt-hooks.log"
 > $log_file
 
-function header(){
+function header()
+{
   #TODO: parameterize offset width
   url="https://github.com/$author/$tool"
   rep="Report issues @ $url/issues"
@@ -76,7 +77,9 @@ function header(){
   border
   printf "\n"
 }
-function logger(){
+
+function logger()
+{
   pref="[sGPUpt]"
   case "$1" in
     success) flag="SUCCESS" col=${GREEN}   ;;
@@ -93,11 +96,12 @@ function logger(){
 
 function main()
 {
-  [[ $(whoami) != "root" ]]                        && logger error "This script requires root privileges!"
-  [[ -z $(grep -E -m 1 "svm|vmx" /proc/cpuinfo) ]] && logger error "This system doesn't support virtualization, please enable it then run this script again!"
-  [[ ! -e /sys/firmware/efi ]]                     && logger error "This system isn't installed in UEFI mode!"
-  [[ -z $(ls -A /sys/class/iommu/) ]]              && logger error "This system doesn't support IOMMU, please enable it then run this script again!"
-  [[ $(nproc) -ne $(grep --count ^processor /proc/cpuinfo) ]]                && logger error "The script will not work correctly if your CPU is isolated, please remove the isolation then try again."
+  # Pre-config validation
+  [[ $(whoami) != "root" ]]                                     && logger error "This script requires root privileges!"
+  # Temp ignore for testing [[ -z $(grep -E -m 1 "svm|vmx" /proc/cpuinfo) ]]              && logger error "This system doesn't support virtualization, please enable it then run this script again!"
+  # Temp ignore for testing [[ ! -e /sys/firmware/efi ]]                                  && logger error "This system isn't installed in UEFI mode!"
+  # Temp ignore for testing [[ -z $(ls -A /sys/class/iommu/) ]]                           && logger error "This system doesn't support IOMMU, please enable it then run this script again!"
+  # Temp ignore for testing [[ $(nproc) -ne $(grep --count ^processor /proc/cpuinfo) ]]   && logger error "The script will not work correctly if your CPU is isolated, please remove the isolation then try again."
 
   header
 
@@ -115,12 +119,12 @@ function main()
   [[ -e "/etc/libvirt/qemu/${vm_name}.xml" ]] && logger error "sGPUpt Will not overwrite an existing VM Config!"
 
   # Call Funcs
-  # query_system
-   install_packages
-  # security_checks
+  #query_system
+  install_packages
+  #security_checks
   compile_checks
-  # setup_libvirt
-  # create_vm
+  #setup_libvirt
+  #create_vm
 
   # NEEDED TO FIX DEBIAN-BASED DISTROS USING VIRT-MANAGER
   if [[ $first_install == "true" ]]; then
@@ -291,7 +295,7 @@ function install_packages()
   arch_depends=(   "qemu-base" "virt-manager" "virt-viewer" "dnsmasq" "vde2" "bridge-utils" "openbsd-netcat" "libguestfs" "swtpm" "git" "make" "ninja" "nasm" "iasl" "pkg-config" "spice-protocol" "dmidecode" "gcc" "flex" "bison" )
   fedora_depends=( "qemu-kvm" "virt-manager" "virt-viewer" "virt-install" "libvirt-daemon-config-network" "libvirt-daemon-kvm" "swtpm" "g++" "ninja-build" "nasm" "iasl" "libuuid-devel" "glib2-devel" "pixman-devel" "spice-protocol" "spice-server-devel" )
   alma_depends=(   "qemu-kvm" "virt-manager" "virt-viewer" "virt-install" "libvirt-daemon-config-network" "libvirt-daemon-kvm" "swtpm" "git" "make" "gcc" "g++" "ninja-build" "nasm" "iasl" "libuuid-devel" "glib2-devel" "pixman-devel" "spice-protocol" "spice-server-devel" )
-  debian_depends=( "qemu-kvm" "virt-manager" "virt-viewer" "libvirt-daemon-system" "libvirt-clients" "bridge-utils" "swtpm" "mesa-utils" "git" "ninja-build" "nasm" "iasl" "pkg-config" "libglib2.0-dev" "libpixman-1-dev" "meson" "build-essential" "uuid-dev" "python-is-python3" "libspice-protocol-dev" "libspice-server-dev" "flex" "bison" )
+  debian_depends=( "qemu-kvm" "virt-manager" "virt-viewer" "libvirt-daemon-system" "libvirt-clients" "bridge-utils" "swtpm" "mesa-utils" "git" "ninja-build" "nasm" "iasl" "pkg-config" "libglib2.0-dev" "libpixman-1-dev" "meson" "build-essential" "uuid-dev" "python-is-python3" "libspice-protocol-dev" "libspice-server-dev" "flex" "bison")
 
   ubuntu_version=( "22.04" "22.10" )
   mint_version=( "21.1" )
@@ -377,13 +381,19 @@ function compile_checks()
     touch /etc/sGPUpt/install-status.txt
   fi
 
-  # Compile if file doesn't exist.
-  if [[ ! -e "${qemu_dir}/build/qemu-system-x86_64" ]]; then
-    qemu_compile
+
+  if [[ -e "${qemu_dir}/build/qemu-system-x86_64" ]]; then
+    read -p "$(logger choice "QEMU build detected, recompile? [Y/n]: ")" CHOICE
+     [[ "$CHOICE" == @("y"|"Y") ]] && qemu_compile
+     else
+     qemu_compile
   fi
 
-  if [[ ! -e "${edk2_dir}/Build/OvmfX64/RELEASE_GCC5/FV/OVMF_CODE.fd" ]]; then
-    edk2_compile
+  if [[ -e "${edk2_dir}/Build/OvmfX64/RELEASE_GCC5/FV/OVMF_CODE.fd" ]]; then
+    read -p "$(logger choice "edk2 build detected, recompile? [Y/n]: ")" CHOICE
+     [[ "$CHOICE" == @("y"|"Y") ]] && edk2_compile
+     else
+     edk2_compile
   fi
 
   # Symlink.
@@ -422,7 +432,15 @@ function qemu_compile()
   cpu_speed=$(dmidecode | grep -m 1 "Current Speed:" | cut -d" " -f3)
   smbios_extbyte_2=$(sudo dmidecode -t 0 -u | awk 'NR == 8 {print substr($0, 12, 2)}')
   
-  [[ ! $smbios_extbyte_2:0:1 =~ [0-9a-fA-F] || ! $smbios_extbyte_2:1:1 =~ [0-9A-F] ]] && smbios_extbyte_2="0D" && logger info "Unable to get SMBIOS extension byte 2 from dmidecode, defaulting to 0x0D"
+  if [[$cpu_speed == ""]]; then 
+  cpu_speed="3000" 
+  logger info "Unable to get cpu speed from dmidecode, defaulting to 3000 MHz"
+  fi
+
+  if [[$smbios_extbyte_2 == "" || ! $smbios_extbyte_2:0:1 =~ [0-9a-fA-F] || ! $smbios_extbyte_2:1:1 =~ [0-9A-F]]]; then 
+  smbios_extbyte_2="0D" 
+  logger info "Unable to get SMBIOS extension byte 2 from dmidecode, defaulting to 0x0D"
+  fi
 
   # Spoofing edits ~ We should probably add a bit more here...
   sed -i "s/\"BOCHS \"/\"$qemu_bios_string1\"/"                                             "${qemu_dir}/include/hw/acpi/aml-build.h"
@@ -436,7 +454,7 @@ function qemu_compile()
   sed -i "s/\"QEMU\"/\"$qemu_tablet_vendor\"/"                                              "${qemu_dir}/hw/usb/dev-wacom.c"
   sed -i "s/\"Wacom PenPartner\"/\"$qemu_tablet_name\"/"                                    "${qemu_dir}/hw/usb/dev-wacom.c"
   sed -i "s/\"QEMU PenPartner Tablet\"/\"$qemu_tablet_name\"/"                              "${qemu_dir}/hw/usb/dev-wacom.c"
-  sed -i "s/#define DEFAULT_CPU_SPEED 2000/#define DEFAULT_CPU_SPEED $cpu_speed/"           "${qemu_dir}/hw/smbios/smbios.c"
+  # Ignore for testing sed -i "s/#define DEFAULT_CPU_SPEED 2000/#define DEFAULT_CPU_SPEED $cpu_speed/"           "${qemu_dir}/hw/smbios/smbios.c"
   sed -i "s/KVMKVMKVM\\\\0\\\\0\\\\0/$cpu_brand/"                                           "${qemu_dir}/include/standard-headers/asm-x86/kvm_para.h"
   sed -i "s/KVMKVMKVM\\\\0\\\\0\\\\0/$cpu_brand/"                                           "${qemu_dir}/target/i386/kvm/kvm.c"
   sed -i "s/\"bochs\"/\"$qemu_motherboard_bios_vendor\"/"                                   "${qemu_dir}/block/bochs.c"
@@ -938,4 +956,5 @@ function print_query()
 	}
 	DOC
 }
+
 main
