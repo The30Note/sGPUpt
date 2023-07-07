@@ -119,12 +119,12 @@ function main()
   [[ -e "/etc/libvirt/qemu/${vm_name}.xml" ]] && logger error "sGPUpt Will not overwrite an existing VM Config!"
 
   # Call Funcs
-  query_system
+  #query_system
   install_packages
-  security_checks
+  #security_checks
   compile_checks
-  setup_libvirt
-  create_vm
+  #setup_libvirt
+  #create_vm
 
   # NEEDED TO FIX DEBIAN-BASED DISTROS USING VIRT-MANAGER
   if [[ $first_install == "true" ]]; then
@@ -408,16 +408,26 @@ function compile_checks()
 
 function qemu_compile()
 {
-  logger info "Starting QEMU compile, this will take a while..."
+  # Get QEMU Source
+  qemu_git_clone=true
 
   if [[ -e "$qemu_dir" ]]; then
-    rm -rf "$qemu_dir"
+    read -p "$(logger choice "Reclone QEMU from source? [y/N]: ")" CHOICE
+    if [[ "$CHOICE" == @("n"|"N"|"") ]]; then
+      qemu_git_clone=false
+    else
+      rm -rf "$qemu_dir"
+    fi
   fi
 
-  mkdir -p "$qemu_dir"
-  cd "$qemu_dir"
+  logger info "Starting QEMU compile, this will take a while..."
 
-  git clone --branch "$qemu_branch" "$qemu_git" "$qemu_dir" 2>&1 | tee -a "$log_file"
+  if [[qemu_git_clone]]; then
+    mkdir -p "$qemu_dir"
+    git clone --branch "$qemu_branch" "$qemu_git" "$qemu_dir" 2>&1 | tee -a "$log_file"
+  fi
+
+  cd "$qemu_dir"
 
   qemu_motherboard_bios_vendor="AMI"
   qemu_bios_string1="ALASKA"
@@ -475,17 +485,27 @@ function qemu_compile()
 
 function edk2_compile()
 {
-  logger info "Starting EDK2 compile, this will take a while..."
+  edk2_git_clone=true
 
   if [[ -e "$edk2_dir" ]]; then
-    rm -rf "$edk2_dir"
+    read -p "$(logger choice "Reclone OVMF from source? [y/N]: ")" CHOICE
+    if [[ "$CHOICE" == @("n"|"N"|"") ]]; then
+      edk2_git_clone=false
+    else 
+      rm -rf "$edk2_dir"
+    fi
   fi
 
-  mkdir -p "$edk2_dir"
-  cd "$edk2_dir"
+  logger info "Starting EDK2 compile, this will take a while..."
 
-  git clone --branch "$edk2_branch" "$edk2_git" "$edk2_dir" 2>&1 | tee -a "$log_file"
-  git submodule update --init 2>&1 | tee -a "$log_file"
+  if [[edk2_git_clone]]; then
+    mkdir -p "$edk2_dir"
+  
+    git clone --branch "$edk2_branch" "$edk2_git" "$edk2_dir" 2>&1 | tee -a "$log_file"
+    git submodule update --init 2>&1 | tee -a "$log_file"
+  fi
+
+  cd "$edk2_dir"
 
   # Spoofing edits
   bios_vendor=$(dmidecode -t 0 | awk '$1 == "Vendor:" {print substr($0, index($0, ":") + 2)}')
