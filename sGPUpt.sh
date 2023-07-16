@@ -319,10 +319,11 @@ function install_packages()
   elif [[ -e /etc/debian_version ]]; then
     case $NAME in
       "Ubuntu") arr=ubuntu ;;
+      "Pika OS") arr=ubuntu ;;
       "Linux Mint") arr=mint ;;
       "Pop!_OS") arr=pop ;;
     esac
-    testVersions "$arr"
+    #testVersions "$arr"
     apt install "${debian_depends[@]}" 2>&1 | tee -a "$log_file"
   elif [[ -e /etc/system-release ]]; then
     case $NAME in
@@ -409,12 +410,12 @@ function compile_checks()
 function qemu_compile()
 {
   # Get QEMU Source
-  qemu_git_clone=true
+  qemu_git_clone="true"
 
   if [[ -e "$qemu_dir" ]]; then
     read -p "$(logger choice "Reclone QEMU from source? [y/N]: ")" CHOICE
     if [[ "$CHOICE" == @("n"|"N"|"") ]]; then
-      qemu_git_clone=false
+      qemu_git_clone="false"
     else
       rm -rf "$qemu_dir"
     fi
@@ -422,7 +423,7 @@ function qemu_compile()
 
   logger info "Starting QEMU compile, this will take a while..."
 
-  if [[qemu_git_clone]]; then
+  if [[ $qemu_git_clone == "true" ]]; then
     mkdir -p "$qemu_dir"
     git clone --branch "$qemu_branch" "$qemu_git" "$qemu_dir" 2>&1 | tee -a "$log_file"
   fi
@@ -485,22 +486,22 @@ function qemu_compile()
 
 function edk2_compile()
 {
-  edk2_git_clone=true
+  edk2_git_clone="true"
 
   if [[ -e "$edk2_dir" ]]; then
     read -p "$(logger choice "Reclone OVMF from source? [y/N]: ")" CHOICE
     if [[ "$CHOICE" == @("n"|"N"|"") ]]; then
-      edk2_git_clone=false
-    else 
+      edk2_git_clone="false"
+    else
       rm -rf "$edk2_dir"
     fi
   fi
 
   logger info "Starting EDK2 compile, this will take a while..."
 
-  if [[edk2_git_clone]]; then
+  if [[ $edk2_git_clone == "true" ]]; then
     mkdir -p "$edk2_dir"
-  
+
     git clone --branch "$edk2_branch" "$edk2_git" "$edk2_dir" 2>&1 | tee -a "$log_file"
     git submodule update --init 2>&1 | tee -a "$log_file"
   fi
