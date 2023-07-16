@@ -119,12 +119,12 @@ function main()
   [[ -e "/etc/libvirt/qemu/${vm_name}.xml" ]] && logger error "sGPUpt Will not overwrite an existing VM Config!"
 
   # Call Funcs
-  #query_system
+  query_system
   install_packages
-  #security_checks
+  security_checks
   compile_checks
-  #setup_libvirt
-  #create_vm
+  setup_libvirt
+  create_vm
 
   # NEEDED TO FIX DEBIAN-BASED DISTROS USING VIRT-MANAGER
   if [[ $first_install == "true" ]]; then
@@ -501,7 +501,7 @@ function edk2_compile()
 
   if [[ $edk2_git_clone == "true" ]]; then
     mkdir -p "$edk2_dir"
-
+    cd "$edk2_dir"
     git clone --branch "$edk2_branch" "$edk2_git" "$edk2_dir" 2>&1 | tee -a "$log_file"
     git submodule update --init --recursive 2>&1 | tee -a "$log_file"
   fi
@@ -511,7 +511,7 @@ function edk2_compile()
   # Spoofing edits
   bios_vendor=$(dmidecode -t 0 | awk '$1 == "Vendor:" {print substr($0, index($0, ":") + 2)}')
 
-  if [[$bios_vendor == ""]]; then 
+  if [[ $bios_vendor == "" ]]; then 
   bios_vendor="American Megatrends"
   logger info "Unable to get BIOS vendor from dmidecode, defaulting to \"American Megatrends\""
   fi
