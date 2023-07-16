@@ -503,7 +503,7 @@ function edk2_compile()
     mkdir -p "$edk2_dir"
 
     git clone --branch "$edk2_branch" "$edk2_git" "$edk2_dir" 2>&1 | tee -a "$log_file"
-    git submodule update --init 2>&1 | tee -a "$log_file"
+    git submodule update --init --recursive 2>&1 | tee -a "$log_file"
   fi
 
   cd "$edk2_dir"
