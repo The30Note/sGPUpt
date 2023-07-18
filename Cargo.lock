@@ -367,7 +367,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sGPUpt"
+name = "single_gpu_passthrough_script"
 version = "0.1.0"
 dependencies = [
  "env_logger",
