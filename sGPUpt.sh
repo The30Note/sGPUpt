@@ -46,64 +46,64 @@ log_file="/etc/sGPUpt/sGPUpt.log"
 log_hook="/etc/sGPUpt/sGPUpt-hooks.log"
 > $log_file
 
-function header()
-{
-  #TODO: parameterize offset width
-  url="https://github.com/$author/$tool"
-  rep="Report issues @ $url/issues"
-  tag="${RED}♥${DEFAULT} $tool made by $author ${RED}♥${DEFAULT}"
-  blen=$(<<< $rep wc -m)
-  row=$((blen+3))
-  tlen=$(<<< $tag wc -m)
-  clen=$(echo -n "${RED}" | wc -m)
-  dlen=$(echo -n "${DEFAULT}" | wc -m)
-  tlen=$((tlen-((clen*2))-((dlen*2))))
-  pad=$((row-tlen))
-  hpad=$((pad/2))
-  border(){
-     printf "\n"
-     for((i=0;i<$row;i++)); do
-       printf "#"
-     done
-  }
-  hpadded(){
-     for((i=0;i<$hpad;i++)); do
-       printf " "
-     done
-  }
-  border
-  printf "\n#%s%s%${hpad}s#\n" "$(hpadded)" "$tag"
-  printf "# %s #" "$rep"
-  border
-  printf "\n"
-}
+# function header()
+# {
+#   #TODO: parameterize offset width
+#   url="https://github.com/$author/$tool"
+#   rep="Report issues @ $url/issues"
+#   tag="${RED}♥${DEFAULT} $tool made by $author ${RED}♥${DEFAULT}"
+#   blen=$(<<< $rep wc -m)
+#   row=$((blen+3))
+#   tlen=$(<<< $tag wc -m)
+#   clen=$(echo -n "${RED}" | wc -m)
+#   dlen=$(echo -n "${DEFAULT}" | wc -m)
+#   tlen=$((tlen-((clen*2))-((dlen*2))))
+#   pad=$((row-tlen))
+#   hpad=$((pad/2))
+#   border(){
+#      printf "\n"
+#      for((i=0;i<$row;i++)); do
+#        printf "#"
+#      done
+#   }
+#   hpadded(){
+#      for((i=0;i<$hpad;i++)); do
+#        printf " "
+#      done
+#   }
+#   border
+#   printf "\n#%s%s%${hpad}s#\n" "$(hpadded)" "$tag"
+#   printf "# %s #" "$rep"
+#   border
+#   printf "\n"
+# }
 
-function logger()
-{
-  pref="[sGPUpt]"
-  case "$1" in
-    success) flag="SUCCESS" col=${GREEN}   ;;
-    info)    flag="INFO"    col=${BLUE}    ;;
-    warn)    flag="WARNING" col=${YELLOW}  ;;
-    choice)  flag="CHOICE"  col=${PINK}    ;;
-    error)   flag="ERROR"   col=${RED}     ;;
-    exit)    flag="EXIT"    col=${RED}     ;;
-    none)    flag=""        col=${DEFAULT} ;;
-  esac
-  printf "%s$col[%s]${DEFAULT} %s\n" "$pref" "$flag" "$2"
-  [[ "$1" == @("error"|"exit") ]] && exit 1
-}
+# function logger()
+# {
+#   pref="[sGPUpt]"
+#   case "$1" in
+#     success) flag="SUCCESS" col=${GREEN}   ;;
+#     info)    flag="INFO"    col=${BLUE}    ;;
+#     warn)    flag="WARNING" col=${YELLOW}  ;;
+#     choice)  flag="CHOICE"  col=${PINK}    ;;
+#     error)   flag="ERROR"   col=${RED}     ;;
+#     exit)    flag="EXIT"    col=${RED}     ;;
+#     none)    flag=""        col=${DEFAULT} ;;
+#   esac
+#   printf "%s$col[%s]${DEFAULT} %s\n" "$pref" "$flag" "$2"
+#   [[ "$1" == @("error"|"exit") ]] && exit 1
+# }
 
 function main()
 {
   # Pre-config validation
-  [[ $(whoami) != "root" ]]                                     && logger error "This script requires root privileges!"
-  [[ -z $(grep -E -m 1 "svm|vmx" /proc/cpuinfo) ]]              && logger error "This system doesn't support virtualization, please enable it then run this script again!"
-  [[ ! -e /sys/firmware/efi ]]                                  && logger error "This system isn't installed in UEFI mode!"
-  [[ -z $(ls -A /sys/class/iommu/) ]]                           && logger error "This system doesn't support IOMMU, please enable it then run this script again!"
+  # [[ $(whoami) != "root" ]]                                     && logger error "This script requires root privileges!"
+  # [[ -z $(grep -E -m 1 "svm|vmx" /proc/cpuinfo) ]]              && logger error "This system doesn't support virtualization, please enable it then run this script again!"
+  # [[ ! -e /sys/firmware/efi ]]                                  && logger error "This system isn't installed in UEFI mode!"
+  # [[ -z $(ls -A /sys/class/iommu/) ]]                           && logger error "This system doesn't support IOMMU, please enable it then run this script again!"
   [[ $(nproc) -ne $(grep --count ^processor /proc/cpuinfo) ]]   && logger error "The script will not work correctly if your CPU is isolated, please remove the isolation then try again."
 
-  header
+  # header
 
   until [[ -n $vm_name ]]; do
     read -p "$(logger choice "Enter VM name: ")" REPLY
@@ -136,24 +136,25 @@ function main()
 function query_system()
 {
   # Base CPU Information
-  cpu_name=$(grep -m 1 'model name' /proc/cpuinfo | cut -c14-)
-  cpu_brand_id=$(grep -m 1 'vendor_id' /proc/cpuinfo | cut -c13-)
-  case $cpu_brand_id in
-    "AuthenticAMD") cpu_type="AMD" ;;
-    "GenuineIntel") cpu_type="Intel" ;;
-    *) logger error "Failed to find CPU brand." ;;
-  esac
+  # cpu_name=$(grep -m 1 'model name' /proc/cpuinfo | cut -c14-)
+  # cpu_brand_id=$(grep -m 1 'vendor_id' /proc/cpuinfo | cut -c13-)
+  # case $cpu_brand_id in
+  #   "AuthenticAMD") cpu_type="AMD" ;;
+  #   "GenuineIntel") cpu_type="Intel" ;;
+  #   *) logger error "Failed to find CPU brand." ;;
+  # esac
 
   # Core + Thread Pairs
   for (( i=0, u=0; i<$(nproc) / 2; i++ )); do
     cpu_group=$(lscpu -p | tail -n +5 | grep ",,[0-9]*,[0-9]*,$i,[0-9]*" | cut -d"," -f1)
-
+    echo $cpu_group
     ((p=1, subtract_int=0))
     for core in $cpu_group; do
       array_cpu[$u]=$(echo $cpu_group | cut -d" " -f$p)
       ((u++, p++, subtract_int++))
     done
   done
+  $array_cpu[0]
 
   # Used for isolation in start.sh & end.sh
   reserved_cpu_group="$(echo $cpu_group | tr " " ",")"

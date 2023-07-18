@@ -15,15 +15,14 @@ fn main() {
     let cpu_name = cpu_info.model_name(0).unwrap();
     let cpu_flags = cpu_info.flags(0).unwrap();
     let cpu_vendor = cpu_info.vendor_id(0).unwrap();
-    let mut cpu_core_groups: Vec<String>;
+    let mut cpu_group_cores: Vec<String> = vec![];
 
-    // TODO: get cpu groups
-    // for cpu in cpu_info.cpus.iter() {
-    //     if cpu.iter().nth(0) == "0" {cpu_core_groups.push(cpu.iter().nth(1))}
-    // }
-
+    // Get cpu cores that start cpu groups; Dont ask me
+    debug!("Get CPU group cores")
+    for cpu in cpu_info.cpus.iter() {
+        // Ill do this later
+    }
     
-
     // svm / vmx check
     debug!("SVM / VMX Check");
     if cpu_flags.contains(&"svm") {
