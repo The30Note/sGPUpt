@@ -154,7 +154,6 @@ function query_system()
       ((u++, p++, subtract_int++))
     done
   done
-  $array_cpu[0]
 
   # Used for isolation in start.sh & end.sh
   reserved_cpu_group="$(echo $cpu_group | tr " " ",")"
