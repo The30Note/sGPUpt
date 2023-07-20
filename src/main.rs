@@ -2,6 +2,8 @@ use log::{debug, error, info};
 use std::path::Path;
 use std::collections::HashMap;
 use std::process::Command;
+use git2::{self, Repository};
+use git2::build::RepoBuilder;
 
 #[derive(Debug)]
 struct PciDevice {
@@ -37,6 +39,9 @@ fn main() {
     let cpu_name = cpu_info.model_name(0).unwrap();
     let cpu_flags = cpu_info.flags(0).unwrap();
     let cpu_vendor = cpu_info.vendor_id(0).unwrap();
+    let cpu_threads_per_core = 2; // Figure out how to get # of threads per core
+    let cpu_threads = cpu_info.cpus.len();
+
     //let mut cpu_group_cores: Vec<String> = vec![];
 
     // Check if running as root
@@ -72,6 +77,15 @@ fn main() {
         info!("IOMMU is enabled");
     } else {
         error!("This system doesn't support IOMMU, please enable it then run this script again!");
+    }
+
+    let qemu_url = "https://github.com/qemu/qemu.git";
+    let qemu_path = Path::new("./qemu/");
+    let qemu_tag = "v8.0.3";
+
+    match git_clone_qemu(qemu_url, qemu_path, qemu_tag) {
+        Ok(_) => println!("QEMU repository cloned successfully."),
+        Err(e) => eprintln!("Failed to clone QEMU repository: {:?}", e),
     }
 }
 
@@ -137,4 +151,17 @@ fn get_pci_devices() -> Vec<PciDevice> {
         devices.push(pci_device);
     }
     return devices
+}
+
+fn qemu_clone(qemu_url: &str, qemu_path: &Path, qemu_tag: &str) -> Result<(), git2::Error> {
+
+    // Clone the repository
+    let qemu_repo = RepoBuilder::new()
+        .clone(qemu_url, qemu_path)?;
+
+    // Checkout the specified tag
+    let object = qemu_repo.revparse_single(qemu_tag)?;
+    qemu_repo.checkout_tree(&object, None)?;
+
+    Ok(())
 }
