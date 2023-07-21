@@ -1,0 +1,13 @@
+diff --git a/block/bochs.c b/block/bochs.c
+index 2f010ab..53457c0 100644
+--- block/bochs.c
++++ block/bochs.c
+@@ -293,7 +293,7 @@ static void bochs_close(BlockDriverState *bs)
+ }
+ 
+ static BlockDriver bdrv_bochs = {
+-    .format_name	= "bochs",
++    .format_name	= "<WOOT>",
+     .instance_size	= sizeof(BDRVBochsState),
+     .bdrv_probe		= bochs_probe,
+     .bdrv_open		= bochs_open,

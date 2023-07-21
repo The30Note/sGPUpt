@@ -2,8 +2,9 @@ use log::{debug, error, info};
 use std::path::Path;
 use std::collections::HashMap;
 use std::process::Command;
-use git2::{self, Repository};
+use git2::{self, Repository, ApplyOptions, Diff};
 use git2::build::RepoBuilder;
+use git2::ApplyLocation;
 
 #[derive(Debug)]
 struct PciDevice {
@@ -82,8 +83,9 @@ fn main() {
     let qemu_url = "https://github.com/qemu/qemu.git";
     let qemu_path = Path::new("./qemu/");
     let qemu_tag = "v8.0.3";
+    let qemu_patch = std::fs::read(Path::new("./qemu.patch")).unwrap();
 
-    match git_clone_qemu(qemu_url, qemu_path, qemu_tag) {
+    match qemu_clone(qemu_url, qemu_path, qemu_tag, qemu_patch) {
         Ok(_) => println!("QEMU repository cloned successfully."),
         Err(e) => eprintln!("Failed to clone QEMU repository: {:?}", e),
     }
@@ -153,15 +155,15 @@ fn get_pci_devices() -> Vec<PciDevice> {
     return devices
 }
 
-fn qemu_clone(qemu_url: &str, qemu_path: &Path, qemu_tag: &str) -> Result<(), git2::Error> {
+fn qemu_clone(qemu_url: &str, qemu_path: &Path, qemu_tag: &str, qemu_patch: Vec<u8>) -> Result<(), git2::Error> {
 
     // Clone the repository
     let qemu_repo = RepoBuilder::new()
         .clone(qemu_url, qemu_path)?;
-
     // Checkout the specified tag
     let object = qemu_repo.revparse_single(qemu_tag)?;
     qemu_repo.checkout_tree(&object, None)?;
+    qemu_repo.apply(&Diff::from_buffer(&qemu_patch)?, ApplyLocation::WorkDir, Some(&mut ApplyOptions::new()))?;
 
     Ok(())
-}
+}   
