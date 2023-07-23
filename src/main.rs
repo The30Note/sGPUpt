@@ -2,9 +2,8 @@ use log::{debug, error, info};
 use std::path::Path;
 use std::collections::HashMap;
 use std::process::Command;
-use git2::{self, Repository, ApplyOptions, Diff};
+use git2::{self, Repository, ApplyOptions, Diff, ApplyLocation, RepositoryState};
 use git2::build::RepoBuilder;
-use git2::ApplyLocation;
 
 #[derive(Debug)]
 struct PciDevice {
@@ -46,7 +45,7 @@ fn main() {
     //let mut cpu_group_cores: Vec<String> = vec![];
 
     // Check if running as root
-    if std::env::var("SUDO_USER").is_ok() == false { error!("This script requires root privileges!"); }
+    if std::env::var("SUDO_USER").is_err() { error!("This script requires root privileges!"); }
 
     // Get cpu cores that start cpu groups; Dont ask me
     debug!("Get CPU group cores");
@@ -86,7 +85,7 @@ fn main() {
     let qemu_patch = std::fs::read(Path::new("./qemu.patch")).unwrap();
 
     match qemu_clone(qemu_url, qemu_path, qemu_tag, qemu_patch) {
-        Ok(_) => println!("QEMU repository cloned successfully."),
+        Ok(_) => println!("QEMU :> "),
         Err(e) => eprintln!("Failed to clone QEMU repository: {:?}", e),
     }
 }
@@ -144,7 +143,7 @@ fn get_pci_devices() -> Vec<PciDevice> {
                     "Device:" => pci_device.device_name = value,
                     "SVendor:" => pci_device.svendor = value,
                     "SDevice:" => pci_device.sdevice = value,
-                    "IOMMUGroup:" => pci_device.iommugroup = u8::from_str_radix(&value, 10).unwrap_or(0),
+                    "IOMMUGroup:" => pci_device.iommugroup = value.parse::<u8>().unwrap_or(0),
                     _ => {}
                 }
             }
@@ -152,18 +151,25 @@ fn get_pci_devices() -> Vec<PciDevice> {
 
         devices.push(pci_device);
     }
-    return devices
+
+    devices
 }
 
 fn qemu_clone(qemu_url: &str, qemu_path: &Path, qemu_tag: &str, qemu_patch: Vec<u8>) -> Result<(), git2::Error> {
 
     // Clone the repository
-    let qemu_repo = RepoBuilder::new()
-        .clone(qemu_url, qemu_path)?;
-    // Checkout the specified tag
-    let object = qemu_repo.revparse_single(qemu_tag)?;
-    qemu_repo.checkout_tree(&object, None)?;
-    qemu_repo.apply(&Diff::from_buffer(&qemu_patch)?, ApplyLocation::WorkDir, Some(&mut ApplyOptions::new()))?;
+    let qemu_repo: Repository;
+    if qemu_path.exists() {
+        qemu_repo = Repository::open(qemu_path)?;
+    } else {
+        qemu_repo = RepoBuilder::new()
+            .clone(qemu_url, qemu_path)?;
+        let object = qemu_repo.revparse_single(qemu_tag)?;
+        qemu_repo.checkout_tree(&object, None)?;
+        info!("Checking out qemu tag")
+    }
+
+    qemu_repo.apply(&Diff::from_buffer(&qemu_patch)?, ApplyLocation::WorkDir, None)?;
 
     Ok(())
-}   
+}
