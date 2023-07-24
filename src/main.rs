@@ -2,10 +2,12 @@ use log::{debug, error, info};
 use std::io::prelude::*;
 use std::path::Path;
 use std::fs::File;
+use std::fs;
 use std::collections::HashMap;
 use std::process::Command;
 use git2::{self, Repository, ApplyOptions, Diff, ApplyLocation, RepositoryState};
 use git2::build::RepoBuilder;
+use std::os::unix::fs::symlink;
 
 #[derive(Debug)]
 struct PciDevice {
@@ -84,21 +86,21 @@ fn main() {
     let qemu_url = "https://github.com/qemu/qemu.git";
     let qemu_path = Path::new("./qemu/");
     let qemu_tag = "v8.0.3";
-    let qemu_patch = std::fs::read(Path::new("./qemu.patch")).unwrap();
+    let qemu_patch_diff = std::fs::read(Path::new("./qemu.patch")).unwrap();
     let qemu_name = "qemu";
 
     let edk2_url = "https://github.com/tianocore/edk2.git";
     let edk2_path = Path::new("./edk2/");
     let edk2_tag = "edk2-stable202211";
-    let edk2_patch = std::fs::read(Path::new("./edk2.patch")).unwrap();
+    let edk2_patch_diff = std::fs::read(Path::new("./edk2.patch")).unwrap();
     let edk2_name = "edk2";
 
-    match repo_clone(qemu_name, qemu_url, qemu_path, qemu_tag, qemu_patch) {
+    match repo_clone(qemu_name, qemu_url, qemu_path, qemu_tag,) {
         Ok(_) => println!("QEMU :> "),
         Err(e) => eprintln!("Failed to clone QEMU repository: {:?}", e),
     }
 
-    match repo_clone(edk2_name, edk2_url, edk2_path, edk2_tag, edk2_patch) {
+    match repo_clone(edk2_name, edk2_url, edk2_path, edk2_tag,) {
         Ok(_) => println!("Edk2 :> "),
         Err(e) => eprintln!("Failed to clone Edk2 repository: {:?}", e),
     }
@@ -169,31 +171,54 @@ fn get_pci_devices() -> Vec<PciDevice> {
     devices
 }
 
-fn repo_clone(repo_name: &str, repo_url: &str, repo_path: &Path, repo_tag: &str, repo_patch: Vec<u8>) -> Result<(), git2::Error> {
+fn repo_clone(repo_name: &str, repo_url: &str, repo_path: &Path, repo_tag: &str,) -> Result<(), git2::Error> {
 
-    // Clone the repository
-    let repo: Repository;
-    if repo_path.exists() {
-        repo = Repository::open(repo_path)?;
-    } else {
-        repo = RepoBuilder::new()
-            .clone(repo_url, repo_path)?;
-        let object = repo.revparse_single(repo_tag)?;
-        repo.checkout_tree(&object, None)?;
-        info!("Checking out {} tag", repo_name)
+    let mut repo_clone = true;
+    
+    if Path::new(repo_path).exists() {
+
+        println!("Would you like to re-clone the GitHub repository? (y/N)");
+    
+        let mut input = String::new();
+        match std::io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                let response = input.trim().to_lowercase();
+                if response == "yes" || response == "y" {
+                    fs::remove_dir_all(repo_path);
+                    repo_clone = true;
+                } else {
+                    repo_clone = false;
+                    let repo = Repository::open(repo_path)?;
+                }
+            }
+            Err(_) => println!("Error reading input. Exiting the program."), //is this needed?
+        }        
     }
 
-    // Apply Patch File
-    //repo.apply(&Diff::from_buffer(&repo_patch)?, ApplyLocation::WorkDir, None)?;
-    match File::create(format!("{}/{}_patch_marker", &repo_path.display(), repo_name)) {
-        Ok(mut file) => {
-            match file.write_all(b"") {
-                Ok(_) => info!("{} Patch Marker created", repo_name),
-                Err(err) => error!("Error writing to file: {:?}", err),
-            }
-        }
-        Err(err) => error!("Error creating file: {:?}", err),
+    if repo_clone {
+        // Git Clone
+        let repo = RepoBuilder::new().clone(repo_url, repo_path)?;
+
+        // Git Checkout
+        repo.checkout_tree(&repo.revparse_single(repo_tag)?, None)?;
+        info!("Checking out {} tag for {}", repo_tag, repo_name)
     }
 
     Ok(())
+}
+
+fn repo_patch(repo_name: &str, repo_path: &Path, repo_patch_diff: Vec<u8>) {
+    if Path::new(&format!("{}/{}_patch_marker", &repo_path.display(), repo_name)).exists() {
+        error!("{} has already been patched.", repo_name)
+    } else {
+        // Apply Patch File
+        let repo = Repository::open(repo_path).unwrap();
+        repo.apply(&Diff::from_buffer(&repo_patch_diff).unwrap(), ApplyLocation::WorkDir, None).unwrap();
+        match File::create(format!("{}/{}_patch_marker", &repo_path.display(), repo_name)) {
+            Ok(mut file) => {
+                file.write_all(b"");
+            },
+            Err(_) => todo!()
+        }
+    }
 }
