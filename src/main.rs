@@ -1,5 +1,7 @@
 use log::{debug, error, info};
+use std::io::prelude::*;
 use std::path::Path;
+use std::fs::File;
 use std::collections::HashMap;
 use std::process::Command;
 use git2::{self, Repository, ApplyOptions, Diff, ApplyLocation, RepositoryState};
@@ -83,10 +85,22 @@ fn main() {
     let qemu_path = Path::new("./qemu/");
     let qemu_tag = "v8.0.3";
     let qemu_patch = std::fs::read(Path::new("./qemu.patch")).unwrap();
+    let qemu_name = "qemu";
 
-    match qemu_clone(qemu_url, qemu_path, qemu_tag, qemu_patch) {
+    let edk2_url = "https://github.com/tianocore/edk2.git";
+    let edk2_path = Path::new("./edk2/");
+    let edk2_tag = "edk2-stable202211";
+    let edk2_patch = std::fs::read(Path::new("./edk2.patch")).unwrap();
+    let edk2_name = "edk2";
+
+    match repo_clone(qemu_name, qemu_url, qemu_path, qemu_tag, qemu_patch) {
         Ok(_) => println!("QEMU :> "),
         Err(e) => eprintln!("Failed to clone QEMU repository: {:?}", e),
+    }
+
+    match repo_clone(edk2_name, edk2_url, edk2_path, edk2_tag, edk2_patch) {
+        Ok(_) => println!("Edk2 :> "),
+        Err(e) => eprintln!("Failed to clone Edk2 repository: {:?}", e),
     }
 }
 
@@ -155,21 +169,31 @@ fn get_pci_devices() -> Vec<PciDevice> {
     devices
 }
 
-fn qemu_clone(qemu_url: &str, qemu_path: &Path, qemu_tag: &str, qemu_patch: Vec<u8>) -> Result<(), git2::Error> {
+fn repo_clone(repo_name: &str, repo_url: &str, repo_path: &Path, repo_tag: &str, repo_patch: Vec<u8>) -> Result<(), git2::Error> {
 
     // Clone the repository
-    let qemu_repo: Repository;
-    if qemu_path.exists() {
-        qemu_repo = Repository::open(qemu_path)?;
+    let repo: Repository;
+    if repo_path.exists() {
+        repo = Repository::open(repo_path)?;
     } else {
-        qemu_repo = RepoBuilder::new()
-            .clone(qemu_url, qemu_path)?;
-        let object = qemu_repo.revparse_single(qemu_tag)?;
-        qemu_repo.checkout_tree(&object, None)?;
-        info!("Checking out qemu tag")
+        repo = RepoBuilder::new()
+            .clone(repo_url, repo_path)?;
+        let object = repo.revparse_single(repo_tag)?;
+        repo.checkout_tree(&object, None)?;
+        info!("Checking out {} tag", repo_name)
     }
 
-    qemu_repo.apply(&Diff::from_buffer(&qemu_patch)?, ApplyLocation::WorkDir, None)?;
+    // Apply Patch File
+    //repo.apply(&Diff::from_buffer(&repo_patch)?, ApplyLocation::WorkDir, None)?;
+    match File::create(format!("{}/{}_patch_marker", &repo_path.display(), repo_name)) {
+        Ok(mut file) => {
+            match file.write_all(b"") {
+                Ok(_) => info!("{} Patch Marker created", repo_name),
+                Err(err) => error!("Error writing to file: {:?}", err),
+            }
+        }
+        Err(err) => error!("Error creating file: {:?}", err),
+    }
 
     Ok(())
 }
