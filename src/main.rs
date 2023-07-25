@@ -27,9 +27,12 @@ fn main() {
     // Init Logger
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
 
-    //Get PCI Devices
+    /*
+    // Get PCI Devices
     debug!("Getting PCI Devices");
     let pci_devices = get_pci_devices();
+    */
+
 
     /*
     // Print pci devices
@@ -46,16 +49,62 @@ fn main() {
     let cpu_threads_per_core = 2; // Figure out how to get # of threads per core
     let cpu_threads = cpu_info.cpus.len();
 
-    //let mut cpu_group_cores: Vec<String> = vec![];
+    //Security Checks
+    security_checks(cpu_flags);
+
+    //Qemu Stuff
+    let qemu_url = "https://github.com/qemu/qemu.git";
+    let qemu_path = Path::new("./qemu/");
+    let qemu_tag = "v8.0.3";
+    let qemu_patch_diff = std::fs::read(Path::new("./qemu.patch")).unwrap();
+    let qemu_name = "qemu";
+
+
+    match repo_clone(qemu_name, qemu_url, qemu_path, qemu_tag,) {
+        Ok(_) => println!("QEMU :> "),
+        Err(e) => eprintln!("Failed to clone QEMU repository: {:?}", e),
+    }
+
+    match repo_patch(qemu_name, qemu_path, qemu_patch_diff) {
+        Ok(()) => {
+            // The patch was successfully applied
+            println!("Qemu Patch applied successfully.");
+        }
+        Err(err) => {
+            // Handling the error returned by the repo_patch function
+            eprintln!("Error Patching Qemu: {}", err);
+        }
+    }
+
+    //Edk2 Stuff
+    let edk2_url = "https://github.com/tianocore/edk2.git";
+    let edk2_path = Path::new("./edk2/");
+    let edk2_tag = "edk2-stable202011";
+    let edk2_patch_diff = std::fs::read(Path::new("./edk2.patch")).unwrap();
+    let edk2_name = "edk2";
+
+    match repo_clone(edk2_name, edk2_url, edk2_path, edk2_tag,) {
+        Ok(_) => println!("Edk2 :> "),
+        Err(e) => eprintln!("Failed to clone Edk2 repository: {:?}", e),
+    }
+
+    
+    match repo_patch(edk2_name, edk2_path, edk2_patch_diff) {
+        Ok(()) => {
+            // The patch was successfully applied
+            println!("Edk2 Patch applied successfully.");
+        }
+        Err(err) => {
+            // Handling the error returned by the repo_patch function
+            eprintln!("Error Patching Edk2: {}", err);
+        }
+    }
+}
+
+fn security_checks(cpu_flags: Vec<&str>) {
 
     // Check if running as root
     if std::env::var("SUDO_USER").is_err() { error!("This script requires root privileges!"); }
-
-    // Get cpu cores that start cpu groups; Dont ask me
-    debug!("Get CPU group cores");
-    for cpu in cpu_info.cpus.iter() {
-        // Ill do this later
-    }
     
     // svm / vmx check
     debug!("SVM / VMX Check");
@@ -82,37 +131,7 @@ fn main() {
     } else {
         error!("This system doesn't support IOMMU, please enable it then run this script again!");
     }
-
-    let qemu_url = "https://github.com/qemu/qemu.git";
-    let qemu_path = Path::new("./qemu/");
-    let qemu_tag = "v8.0.3";
-    let qemu_patch_diff = std::fs::read(Path::new("./qemu.patch")).unwrap();
-    let qemu_name = "qemu";
-
-    let edk2_url = "https://github.com/tianocore/edk2.git";
-    let edk2_path = Path::new("./edk2/");
-    let edk2_tag = "edk2-stable202211";
-    let edk2_patch_diff = std::fs::read(Path::new("./edk2.patch")).unwrap();
-    let edk2_name = "edk2";
-
-    match repo_clone(qemu_name, qemu_url, qemu_path, qemu_tag,) {
-        Ok(_) => println!("QEMU :> "),
-        Err(e) => eprintln!("Failed to clone QEMU repository: {:?}", e),
-    }
-
-    match repo_clone(edk2_name, edk2_url, edk2_path, edk2_tag,) {
-        Ok(_) => println!("Edk2 :> "),
-        Err(e) => eprintln!("Failed to clone Edk2 repository: {:?}", e),
-    }
 }
-
-// Purely for testing
-fn print_hashmap<K: std::fmt::Debug + std::fmt::Display, V: std::fmt::Debug + std::fmt::Display>(hashmap: &HashMap<K, V>) {
-    for (key, value) in hashmap.iter() {
-        println!("{}: {}", key, value);
-    }
-}
-
 
 fn get_pci_devices() -> Vec<PciDevice> {
     let output = Command::new("lspci")
@@ -171,13 +190,13 @@ fn get_pci_devices() -> Vec<PciDevice> {
     devices
 }
 
-fn repo_clone(repo_name: &str, repo_url: &str, repo_path: &Path, repo_tag: &str,) -> Result<(), git2::Error> {
+fn repo_clone(repo_name: &str, repo_url: &str, repo_path: &Path, repo_tag: &str,) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut repo_clone = true;
     
     if Path::new(repo_path).exists() {
 
-        println!("Would you like to re-clone the GitHub repository? (y/N)");
+        println!("Would you like to re-clone the {} GitHub repository? (y/N)", repo_name);
     
         let mut input = String::new();
         match std::io::stdin().read_line(&mut input) {
@@ -188,37 +207,65 @@ fn repo_clone(repo_name: &str, repo_url: &str, repo_path: &Path, repo_tag: &str,
                     repo_clone = true;
                 } else {
                     repo_clone = false;
-                    let repo = Repository::open(repo_path)?;
+                    // let repo = Repository::open(repo_path)?; not needed
                 }
             }
-            Err(_) => println!("Error reading input. Exiting the program."), //is this needed?
+            Err(_) => error!("Error reading input. Exiting the program."), //is this needed?
         }        
     }
 
     if repo_clone {
-        // Git Clone
+        // Git 
+        info!("Cloning {}, this may take a while.", repo_name);
         let repo = RepoBuilder::new().clone(repo_url, repo_path)?;
 
         // Git Checkout
+        info!("Checking out {} tag for {}", repo_tag, repo_name);
         repo.checkout_tree(&repo.revparse_single(repo_tag)?, None)?;
-        info!("Checking out {} tag for {}", repo_tag, repo_name)
     }
 
     Ok(())
 }
 
-fn repo_patch(repo_name: &str, repo_path: &Path, repo_patch_diff: Vec<u8>) {
+// fn repo_patch(repo_name: &str, repo_path: &Path, repo_patch_diff: Vec<u8>) {
+//     if Path::new(&format!("{}/{}_patch_marker", &repo_path.display(), repo_name)).exists() {
+//         error!("{} has already been patched.", repo_name)
+//     } else {
+//         // Apply Patch File
+//         debug!("Opening {} Repo", repo_name);
+//         let repo = Repository::open(repo_path).unwrap();
+//         debug!("Appling {} patch", repo_name);
+//         repo.apply(&Diff::from_buffer(&repo_patch_diff).unwrap(), ApplyLocation::WorkDir, None).unwrap(); // TODO handle errors
+//         match File::create(format!("{}/{}_patch_marker", &repo_path.display(), repo_name)) {
+//             Ok(mut file) => {
+//                 match file.write_all(b"") {
+//                     Ok(_) => {
+//                         info!("{}_patch_marker created", repo_name);
+//                     },
+//                     Err(e) => {
+//                         todo!();
+//                     }
+//                 }
+//             },
+//             Err(_) => todo!()
+//         }
+//     }
+// }
+
+fn repo_patch(repo_name: &str, repo_path: &Path, repo_patch_diff: Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
     if Path::new(&format!("{}/{}_patch_marker", &repo_path.display(), repo_name)).exists() {
-        error!("{} has already been patched.", repo_name)
+        return Err(format!("{} has already been patched.", repo_name).into());
     } else {
         // Apply Patch File
-        let repo = Repository::open(repo_path).unwrap();
-        repo.apply(&Diff::from_buffer(&repo_patch_diff).unwrap(), ApplyLocation::WorkDir, None).unwrap();
-        match File::create(format!("{}/{}_patch_marker", &repo_path.display(), repo_name)) {
-            Ok(mut file) => {
-                file.write_all(b"");
-            },
-            Err(_) => todo!()
-        }
+        debug!("Opening {} Repo", repo_name);
+        let repo = Repository::open(repo_path)?;
+        debug!("Applying {} patch", repo_name);
+        repo.apply(&Diff::from_buffer(&repo_patch_diff)?, ApplyLocation::WorkDir, None)?;
+
+        let patch_marker_path = format!("{}/{}_patch_marker", &repo_path.display(), repo_name);
+        File::create(&patch_marker_path)?.write_all(b"")?;
+        info!("{}_patch_marker created", repo_name);
     }
+
+    Ok(())
 }
