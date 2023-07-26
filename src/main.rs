@@ -3,13 +3,10 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::fs::File;
 use std::fs;
-use std::collections::HashMap;
 use std::process::Command;
-use git2::{self, Repository, ApplyOptions, Diff, ApplyLocation, RepositoryState};
+use git2::{self, Repository, Diff, ApplyLocation};
 use git2::build::RepoBuilder;
-use std::os::unix::fs::symlink;
 
-#[derive(Debug)]
 struct PciDevice {
     bus: u8,
     device: u8,
@@ -27,11 +24,11 @@ fn main() {
     // Init Logger
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("trace")).init();
 
-    /*
+
     // Get PCI Devices
     debug!("Getting PCI Devices");
-    let pci_devices = get_pci_devices();
-    */
+    let pci_devices: Vec<PciDevice> = get_pci_devices();
+
 
 
     /*
@@ -42,22 +39,22 @@ fn main() {
     */
 
     // Get cpuinfo
-    let cpu_info = procfs::CpuInfo::new().unwrap();
-    let cpu_name = cpu_info.model_name(0).unwrap();
-    let cpu_flags = cpu_info.flags(0).unwrap();
-    let cpu_vendor = cpu_info.vendor_id(0).unwrap();
-    let cpu_threads_per_core = 2; // Figure out how to get # of threads per core
-    let cpu_threads = cpu_info.cpus.len();
+    let cpu_info: procfs::CpuInfo = procfs::CpuInfo::new().unwrap();
+    let cpu_name: &str = cpu_info.model_name(0).unwrap();
+    let cpu_flags: Vec<&str> = cpu_info.flags(0).unwrap();
+    let cpu_vendor: &str = cpu_info.vendor_id(0).unwrap();
+    let cpu_threads_per_core: i32 = 2; // Figure out how to get # of threads per core
+    let cpu_threads: usize = cpu_info.cpus.len();
 
     //Security Checks
     security_checks(cpu_flags);
 
     //Qemu Stuff
-    let qemu_url = "https://github.com/qemu/qemu.git";
-    let qemu_path = Path::new("./qemu/");
-    let qemu_tag = "v8.0.3";
-    let qemu_patch_diff = std::fs::read(Path::new("./qemu.patch")).unwrap();
-    let qemu_name = "qemu";
+    let qemu_url: &str = "https://github.com/qemu/qemu.git";
+    let qemu_path: &Path = Path::new("./qemu/");
+    let qemu_tag: &str = "v8.0.3";
+    let qemu_patch_diff: Vec<u8> = std::fs::read(Path::new("./qemu.patch")).unwrap();
+    let qemu_name: &str = "qemu";
 
 
     match repo_clone(qemu_name, qemu_url, qemu_path, qemu_tag,) {
@@ -74,6 +71,11 @@ fn main() {
             // Handling the error returned by the repo_patch function
             eprintln!("Error Patching Qemu: {}", err);
         }
+    }
+
+    match qemu_compile(qemu_path, cpu_threads) {
+        Ok(()) => info!("QEMU build successful."),
+        Err(err) => error!("Qemu Build Err: {}", err),
     }
 
     //Edk2 Stuff
@@ -126,7 +128,7 @@ fn security_checks(cpu_flags: Vec<&str>) {
 
     // IOMMU check
     debug!("IOMMU Check");
-    if Path::new("/sys/class/iommu/").read_dir().unwrap().any(|entry| entry.is_ok()) {
+    if Path::new("/sys/class/iommu/").read_dir().unwrap().any(|entry: Result<fs::DirEntry, std::io::Error>| entry.is_ok()) {
         info!("IOMMU is enabled");
     } else {
         error!("This system doesn't support IOMMU, please enable it then run this script again!");
@@ -227,31 +229,6 @@ fn repo_clone(repo_name: &str, repo_url: &str, repo_path: &Path, repo_tag: &str,
     Ok(())
 }
 
-// fn repo_patch(repo_name: &str, repo_path: &Path, repo_patch_diff: Vec<u8>) {
-//     if Path::new(&format!("{}/{}_patch_marker", &repo_path.display(), repo_name)).exists() {
-//         error!("{} has already been patched.", repo_name)
-//     } else {
-//         // Apply Patch File
-//         debug!("Opening {} Repo", repo_name);
-//         let repo = Repository::open(repo_path).unwrap();
-//         debug!("Appling {} patch", repo_name);
-//         repo.apply(&Diff::from_buffer(&repo_patch_diff).unwrap(), ApplyLocation::WorkDir, None).unwrap(); // TODO handle errors
-//         match File::create(format!("{}/{}_patch_marker", &repo_path.display(), repo_name)) {
-//             Ok(mut file) => {
-//                 match file.write_all(b"") {
-//                     Ok(_) => {
-//                         info!("{}_patch_marker created", repo_name);
-//                     },
-//                     Err(e) => {
-//                         todo!();
-//                     }
-//                 }
-//             },
-//             Err(_) => todo!()
-//         }
-//     }
-// }
-
 fn repo_patch(repo_name: &str, repo_path: &Path, repo_patch_diff: Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
     if Path::new(&format!("{}/{}_patch_marker", &repo_path.display(), repo_name)).exists() {
         return Err(format!("{} has already been patched.", repo_name).into());
@@ -268,4 +245,42 @@ fn repo_patch(repo_name: &str, repo_path: &Path, repo_patch_diff: Vec<u8>) -> Re
     }
 
     Ok(())
+}
+
+fn qemu_compile(qemu_path: &Path, cpu_threads: usize) -> std::io::Result<()> {
+
+    // Configure Qemu for build
+    let configure_cmd = Command::new("./configure")
+        .current_dir(qemu_path)
+        .arg("--enable-spice")
+        .arg("--disable-werror")
+        .spawn();
+
+    match configure_cmd {
+        Ok(mut child) => {
+            let status = child.wait()?;
+            if !status.success() {
+                return Err(todo!());
+            }
+        }
+        Err(e) => return Err(e),
+    }
+
+    let qemu_make: Result<std::process::Child, std::io::Error> = Command::new("make")
+        .current_dir(qemu_path)
+        .arg(format!("-j{}", cpu_threads))
+        .spawn();
+
+    match qemu_make {
+        Ok(mut child) => {
+            let status = child.wait()?;
+            if status.success() {
+                return Ok(())
+            } else {
+                return Err(todo!());
+            }
+        }
+        Err(e) => return Err(e),
+    }
+
 }
