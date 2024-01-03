@@ -1,7 +1,7 @@
 use log::{debug, error, info};
-use std::env::current_dir;
 use std::io::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
 use std::fs::File;
 use std::fs;
 use std::process::Command;
@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     //Clone -> Patch -> Compile Qemu
     repo_clone(&qemu_repo)?;
-    repo_patch(&qemu_repo)?;
+    qemu_patch(&qemu_repo)?;
     qemu_compile(&qemu_repo, cpu_threads)?;
 
     //Edk2 Stuff
@@ -97,9 +97,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         patch_diff: std::fs::read(Path::new("./edk2.patch")).unwrap(),
         name: "edk2".into(),
     };
+
+    //Clone -> Patch -> Compile edk2
     repo_clone(&edk2_repo)?;
-    repo_patch(&edk2_repo)?;
+    edk2_patch(&edk2_repo)?;
     edk2_compile(&edk2_repo, cpu_threads)?;
+
+    const PACKAGES: &[&str] = &[
+    "qemu-kvm",
+    "virt-manager",
+    "virt-viewer",
+    "libvirt-daemon-system",
+    "libvirt-clients",
+    "bridge-utils",
+    "swtpm",
+    "mesa-utils",
+    "git",
+    "ninja-build",
+    "nasm",
+    "iasl",
+    "pkg-config",
+    "libglib2.0-dev",
+    "libpixman-1-dev",
+    "meson",
+    "build-essential",
+    "uuid-dev",
+    "python-is-python3",
+    "libspice-protocol-dev",
+    "libspice-server-dev",
+    "flex",
+    "bison",
+    ];
+    install_packages(PACKAGES)?;
 
 
     Ok(())
@@ -225,15 +254,93 @@ fn repo_clone(repo: &Repo) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn repo_patch(repo: &Repo) -> Result<(), Box<dyn std::error::Error>> {
+fn qemu_patch(repo: &Repo) -> Result<(), Box<dyn std::error::Error>> {
     if Path::new(&format!("{}/{}_patch_marker", &repo.path.display(), repo.name)).exists() {
         return Err(format!("{} has already been patched.", repo.name).into());
     } else {
-        // Apply Patch File
-        debug!("Opening {} Repo", repo.name);
-        let repo_clone = Repository::open(&repo.path)?;
-        debug!("Applying {} patch", repo.name);
-        repo_clone.apply(&Diff::from_buffer(&repo.patch_diff)?, ApplyLocation::WorkDir, None)?;
+        
+
+        //This is a shitty way of doing this but lazy
+        replace_string_in_file(&repo.path, "block/bochs.c",
+        ".format_name\t= \"bochs\",",
+        ".format_name\t= \"woots\",")?;
+
+        replace_string_in_file(&repo.path, "hw/i386/fw_cfg.c",
+        "* DMA control register is located at FW_CFG_DMA_IO_BASE + 4\n */",
+        "* DMA control register is located at FW_CFG_DMA_IO_BASE + 4")?;
+        replace_string_in_file(&repo.path, "hw/i386/fw_cfg.c",
+        "/* device present, functioning, decoding, not shown in UI */",
+        "/* device present, functioning, decoding, not shown in UI ")?;
+        replace_string_in_file(&repo.path, "hw/i386/fw_cfg.c",
+        "aml_append(scope, dev);",
+        "aml_append(scope, dev); */")?;
+        
+        replace_string_in_file(&repo.path, "hw/scsi/scsi-disk.c",
+        "s->vendor = g_strdup(\"QEMU\");",
+        "s->vendor = g_strdup(\"<WOOT>\");")?;
+        replace_string_in_file(&repo.path, "hw/scsi/scsi-disk.c",
+        "s->product = g_strdup(\"QEMU HARDDISK\");",
+        "s->product = g_strdup(\"WDC WD20EARS\");")?;
+        replace_string_in_file(&repo.path, "hw/scsi/scsi-disk.c",
+        "s->product = g_strdup(\"QEMU CD-ROM\");",
+        "s->product = g_strdup(\"TOSHIBA DVD-ROM\");")?;
+        
+        replace_string_in_file(&repo.path, "hw/smbios/smbios.c",
+        "t->bios_characteristics_extension_bytes[1] = 0x14;",
+        "t->bios_characteristics_extension_bytes[1] = 0x08;")?;
+
+        replace_string_in_file(&repo.path, "hw/usb/dev-wacom.c",
+        "QEMU PenPartner tablet",
+        "WOOT PenPartner tablet")?;
+        replace_string_in_file(&repo.path, "hw/usb/dev-wacom.c",
+        "QEMU PenPartner Tablet",
+        "WOOT PenPartner Tablet")?;
+        replace_string_in_file(&repo.path, "hw/usb/dev-wacom.c",
+        "[STR_MANUFACTURER]     = \"QEMU\",",
+        "[STR_MANUFACTURER]     = \"WOOT\",")?;
+
+        replace_string_in_file(&repo.path, "include/hw/acpi/aml-build.h",
+        "#define ACPI_BUILD_APPNAME6 \"BOCHS \"\n#define ACPI_BUILD_APPNAME4 \"BXPC\"",
+        "#define ACPI_BUILD_APPNAME6 \"ALASKA \"\n#define ACPI_BUILD_APPNAME4 \"RCKS\"")?;
+        
+        replace_string_in_file(&repo.path, "target/i386/kvm/kvm.c",
+        "KVMKVMKVM\\0\\0\\0",
+        "GenuineIntel")?;
+
+        let patch_marker_path = format!("{}/{}_patch_marker", &repo.path.display(), repo.name);
+        File::create(&patch_marker_path)?.write_all(b"")?;
+        info!("{}_patch_marker created", repo.name);
+    }
+
+    Ok(())
+}
+
+fn edk2_patch(repo: &Repo) -> Result<(), Box<dyn std::error::Error>> {
+    if Path::new(&format!("{}/{}_patch_marker", &repo.path.display(), repo.name)).exists() {
+        return Err(format!("{} has already been patched.", repo.name).into());
+    } else {
+        
+        //This is a shitty way of doing this but lazy
+        replace_string_in_file(&repo.path, "MdeModulePkg/MdeModulePkg.dec",
+        "gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemTableId|0x20202020324B4445|UINT64|0x30001035",
+        "gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemTableId|0x20202020324B4544|UINT64|0x30001035")?;
+        replace_string_in_file(&repo.path, "OvmfPkg/AcpiTables/Dsdt.asl",
+        "DefinitionBlock (\"Dsdt.aml\", \"DSDT\", 1, \"INTEL \", \"OVMF    \", 4)",
+        "DefinitionBlock (\"Dsdt.aml\", \"DSDT\", 1, \"INTEL \", \"WOOT    \", 4)")?;
+
+        replace_string_in_file(&repo.path, "OvmfPkg/AcpiTables/Platform.h",
+        "#define EFI_ACPI_OEM_ID           'O','V','M','F',' ',' '   // OEMID 6 bytes long\n#define EFI_ACPI_OEM_TABLE_ID     SIGNATURE_64('O','V','M','F','E','D','K','2') // OEM table id 8 bytes long\n#define EFI_ACPI_OEM_REVISION     0x20130221\n#define EFI_ACPI_CREATOR_ID       SIGNATURE_32('O','V','M','F')\n#define EFI_ACPI_CREATOR_REVISION 0x00000099",
+        "#define EFI_ACPI_OEM_ID           'W','O','O','T',' ',' '   // OEMID 6 bytes long\n#define EFI_ACPI_OEM_TABLE_ID     SIGNATURE_64('W','O','O','T','N','O','O','B') // OEM table id 8 bytes long\n#define EFI_ACPI_OEM_REVISION     0x20201230\n#define EFI_ACPI_CREATOR_ID       SIGNATURE_32('N','O','O','B')\n#define EFI_ACPI_CREATOR_REVISION 0x00000098")?;
+
+        replace_string_in_file(&repo.path, "OvmfPkg/AcpiTables/Ssdt.asl",
+        "DefinitionBlock (\"Ssdt.aml\", \"SSDT\", 1, \"REDHAT \", \"OVMF    \", 4)",
+        "DefinitionBlock (\"Ssdt.aml\", \"SSDT\", 1, \"<WOOT> \", \"WOOT    \", 4)")?;
+
+
+        replace_string_in_file(&repo.path, "OvmfPkg/SmbiosPlatformDxe/SmbiosPlatformDxe.c",
+        "  \"EFI Development Kit II / OVMF\\0\"     /* Vendor */ \n  \"0.0.0\\0\"                             /* BiosVersion */ \n  \"02/06/2015\\0\"                        /* BiosReleaseDate */",
+        "  \"American Megatrends Inc. NOOP\\0\"     /* Vendor */ \n  \"1.6.0\\0\"                             /* BiosVersion */ \n  \"12/01/2020\\0\"                        /* BiosReleaseDate */")?;
+
 
         let patch_marker_path = format!("{}/{}_patch_marker", &repo.path.display(), repo.name);
         File::create(&patch_marker_path)?.write_all(b"")?;
@@ -264,6 +371,7 @@ fn qemu_compile(qemu: &Repo, cpu_threads: usize) -> Result<(), Box<dyn std::erro
 
 fn edk2_compile(edk2: &Repo, cpu_threads: usize) -> Result<(), Box<dyn std::error::Error>> {
 
+
     // Configure Qemu for build
     Command::new("make")
         .current_dir(&edk2.path)
@@ -284,4 +392,58 @@ fn edk2_compile(edk2: &Repo, cpu_threads: usize) -> Result<(), Box<dyn std::erro
         .arg("-t").arg("GCC5")
         .spawn()?;
     Ok(())
+}
+
+//Replace string in file
+fn replace_string_in_file(base_dir: &Box<std::path::Path>, sub_dir: &str, old_string: &str, new_string: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut file = std::fs::read_to_string(base_dir.join(sub_dir))?;
+    file = file.replace(old_string, new_string);
+    std::fs::write(base_dir.join(sub_dir), file)?;
+    Ok(())
+}
+
+// Install packages with apt, force reinstall and add -y flag
+fn install_packages(packages: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
+    debug!("Installing packages");
+    let mut command = Command::new("apt");
+    command.arg("install");
+    command.arg("--reinstall");
+    command.arg("-y");
+    for package in packages {
+        command.arg(package);
+    }
+    command.spawn()?;
+    Ok(())
+}
+
+fn configure_apparmor() -> std::io::Result<()> {
+    if !std::path::Path::new("/etc/apparmor.d/disable/usr.sbin.libvirtd").exists() {
+        Command::new("ln")
+            .arg("-s")
+            .arg("/etc/apparmor.d/usr.sbin.libvirtd")
+            .arg("/etc/apparmor.d/disable/")
+            .output()?;
+        
+        Command::new("apparmor_parser")
+            .arg("-R")
+            .arg("/etc/apparmor.d/usr.sbin.libvirtd")
+            .output()?;
+    }
+    
+    Ok(())
+}
+
+fn libvirt_group() {
+    let output = Command::new("getent")
+        .arg("group")
+        .arg("libvirt")
+        .output()
+        .expect("Failed to execute command");
+
+    if output.stdout.is_empty() {
+        Command::new("groupadd")
+            .arg("libvirt")
+            .output()
+            .expect("Failed to execute command");
+    }
 }

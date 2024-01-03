@@ -357,8 +357,8 @@ function security_checks()
   ############################################################################################
 
   if [[ $NAME =~ ("Ubuntu"|"Pop!_OS"|"Linux Mint") ]] && [[ ! -e /etc/apparmor.d/disable/usr.sbin.libvirtd ]]; then
-    ln -s /etc/apparmor.d/usr.sbin.libvirtd /etc/apparmor.d/disable/ | tee -a "$log_file"
-    apparmor_parser -R /etc/apparmor.d/usr.sbin.libvirtd | tee -a "$log_file"
+    ln -s /etc/apparmor.d/usr.sbin.libvirtd /etc/apparmor.d/disable/
+    apparmor_parser -R /etc/apparmor.d/usr.sbin.libvirtd
 
     first_install="true" # Fix for debain-based distros.
     logger info "Disabling AppArmor permanently for this distro"
@@ -534,15 +534,14 @@ function setup_libvirt()
 {
   # If group doesn't exist then create it
   if [[ -z $(getent group libvirt) ]]; then
-    groupadd libvirt 2>&1 | tee -a "$log_file"
-    logger info "Created libvirt group"
+    groupadd libvirt
   fi
 
   # If either user isn't in the group then add all of them again
   if [[ -z $(groups $SUDO_USER | grep libvirt | grep kvm | grep input) ]]; then
     usermod -aG libvirt,kvm,input $SUDO_USER 2>&1 | tee -a "$log_file"
     logger info "Added user '$SUDO_USER' to groups 'libvirt,kvm,input'"
-  fi
+  fi/
 
   # Edit virtualization files
   [[ -z $(grep "^unix_sock_group = \"libvirt\"" /etc/libvirt/libvirtd.conf) ]] && sed -i "s/^.*unix_sock_group = \".*\"/unix_sock_group = \"libvirt\"/" /etc/libvirt/libvirtd.conf
